@@ -1,18 +1,16 @@
-const API_BASE_URL_OVERRIDE = "https://quanlytiemchungvaccine-production-f8af.up.railway.app";
 const API_BASE_URL = (() => {
   try {
     const host = typeof location !== "undefined" ? location.hostname : "";
     const isLocal = host === "localhost" || host === "127.0.0.1" || host === "";
-    
-    // Nếu là local, bỏ qua override và trỏ về 8080 để test các thay đổi mới
+
+    // Local: backend Spring thường chạy 8080
     if (isLocal) return "http://localhost:8080";
 
-    if (API_BASE_URL_OVERRIDE != null && String(API_BASE_URL_OVERRIDE).trim() !== "") {
-      return String(API_BASE_URL_OVERRIDE).replace(/\/$/, "");
-    }
+    // Production: cùng origin với trang (Railway có thể đổi subdomain, vd. ...-production... vs ...-f8af...).
+    // Gọi /api/... trên đúng host bạn đang mở — tránh CORS / gọi nhầm service khác.
     return "";
   } catch {
-    return "";  
+    return "";
   }
 })();
 
@@ -21,11 +19,11 @@ const API_TIMEOUT_MS = 15000;
 async function apiRequest(path, { method = "GET", body } = {}) {
   // Sửa lỗi lặp đường dẫn: nếu path đã có sẵn API_BASE_URL thì không nối thêm nữa
   const finalPath = path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
-  
+
   const headers = {
     "Content-Type": "application/json",
     // QUAN TRỌNG: Header này giúp bỏ qua trang cảnh báo của ngrok
-    "ngrok-skip-browser-warning": "true"
+    "ngrok-skip-browser-warning": "true",
   };
 
   const ctrl = new AbortController();
@@ -49,7 +47,7 @@ async function apiRequest(path, { method = "GET", body } = {}) {
       if (payload) {
         msg = payload.message || payload.error || "";
       }
-      
+
       if (!msg) {
         try {
           const text = await res.text();
@@ -67,6 +65,18 @@ async function apiRequest(path, { method = "GET", body } = {}) {
 }
 
 // Các hàm getSession, setSession, clearSession giữ nguyên của bạn...
-function getSession() { const raw = localStorage.getItem("session"); if (!raw) return null; try { return JSON.parse(raw); } catch { return null; } }
-function setSession(data) { localStorage.setItem("session", JSON.stringify(data)); }
-function clearSession() { localStorage.removeItem("session"); }
+function getSession() {
+  const raw = localStorage.getItem("session");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function setSession(data) {
+  localStorage.setItem("session", JSON.stringify(data));
+}
+function clearSession() {
+  localStorage.removeItem("session");
+}
