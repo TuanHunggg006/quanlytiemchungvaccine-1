@@ -57,7 +57,13 @@ public class StatisticsService {
         Double todayRev = jdbcTemplate.queryForObject(todayRevSql, Double.class);
         stats.setTodayRevenue(todayRev != null ? todayRev : 0.0);
 
-        String todayCountSql = "SELECT COUNT(*) FROM BILL WHERE DUE_DATE = CURRENT_DATE";
+        // Due date = hạn thanh toán (thường không phải hôm nay); lấy thêm ngày tiêm trên phiếu
+        // để số bill "hôm nay" khớp khi tạo bill cùng ngày tiêm nhưng due date sau.
+        String todayCountSql = """
+                SELECT COUNT(*) FROM BILL b
+                JOIN VACCINATION_FORM f ON f.VACCINATION_FORM_ID = b.VACCINATION_FORM_ID
+                WHERE b.DUE_DATE = CURRENT_DATE OR f.VACCINATION_DATE = CURRENT_DATE
+                """;
         Long todayCount = jdbcTemplate.queryForObject(todayCountSql, Long.class);
         stats.setTodayBillsCount(todayCount != null ? todayCount : 0L);
 
