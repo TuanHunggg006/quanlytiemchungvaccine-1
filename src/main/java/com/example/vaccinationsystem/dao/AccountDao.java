@@ -33,8 +33,7 @@ public class AccountDao {
                 WHERE USERNAME = ?
                 """;
         List<AccountRow> rows = jdbcTemplate.query(sql, ACCOUNT_ROW_MAPPER, username);
-        if (rows.isEmpty()) return Optional.empty();
-        return Optional.of(rows.get(0));
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 
     public Optional<String> findDoctorIdByAccountId(String accountId) {
@@ -64,20 +63,20 @@ public class AccountDao {
     public List<AccountInfoDTO> findAllWithDetails() {
         String sql = """
                 SELECT DISTINCT a.ACCOUNT_ID, a.AUTHORITY, a.USERNAME, a.EMAIL, a.PASSWORD,
-                       CASE a.AUTHORITY
-                         WHEN 'DOCTOR' THEN d.DOCTOR_ID
-                         WHEN 'CASHIER' THEN c.CASHIER_ID
-                         WHEN 'INVENTORY_MANAGER' THEN i.INVENTORY_MANAGER_ID
-                         WHEN 'ADMINISTRATOR' THEN m.ADMINISTRATOR_ID
+                       CASE
+                         WHEN a.AUTHORITY = 'DOCTOR' THEN d.DOCTOR_ID
+                         WHEN a.AUTHORITY = 'CASHIER' THEN c.CASHIER_ID
+                         WHEN a.AUTHORITY IN ('INVENTORY_MANAGER', 'IM') THEN i.INVENTORY_MANAGER_ID
+                         WHEN a.AUTHORITY IN ('ADMINISTRATOR', 'ADMIN') THEN m.ADMINISTRATOR_ID
                          ELSE NULL
-                       END as EMP_ID,
-                       CASE a.AUTHORITY
-                         WHEN 'DOCTOR' THEN d.NAME
-                         WHEN 'CASHIER' THEN c.NAME
-                         WHEN 'INVENTORY_MANAGER' THEN i.NAME
-                         WHEN 'ADMINISTRATOR' THEN m.NAME
+                       END AS EMP_ID,
+                       CASE
+                         WHEN a.AUTHORITY = 'DOCTOR' THEN d.NAME
+                         WHEN a.AUTHORITY = 'CASHIER' THEN c.NAME
+                         WHEN a.AUTHORITY IN ('INVENTORY_MANAGER', 'IM') THEN i.NAME
+                         WHEN a.AUTHORITY IN ('ADMINISTRATOR', 'ADMIN') THEN m.NAME
                          ELSE NULL
-                       END as EMP_NAME
+                       END AS EMP_NAME
                 FROM ACCOUNT a
                 LEFT JOIN DOCTOR d ON a.ACCOUNT_ID = d.ACCOUNT_ID
                 LEFT JOIN CASHIER c ON a.ACCOUNT_ID = c.ACCOUNT_ID
@@ -85,6 +84,7 @@ public class AccountDao {
                 LEFT JOIN ADMINISTRATOR m ON a.ACCOUNT_ID = m.ACCOUNT_ID
                 ORDER BY a.ACCOUNT_ID DESC
                 """;
+
         return jdbcTemplate.query(sql, (rs, rowNum) -> {
             AccountInfoDTO dto = new AccountInfoDTO();
             dto.setAccountId(rs.getString("ACCOUNT_ID"));
@@ -98,23 +98,31 @@ public class AccountDao {
         });
     }
 
-    public String getLatestAccountId() {
-        String sql = "SELECT ACCOUNT_ID FROM ACCOUNT ORDER BY ACCOUNT_ID DESC LIMIT 1";
-        List<String> rows = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString(1));
-        return rows.isEmpty() ? "AC000" : rows.get(0);
+    public String getNextAccountId() {
+        return getNextId("ACCOUNT", "ACCOUNT_ID", "ACC");
     }
 
-    public String getLatestEmployeeId(String table, String idColumn) {
-        String sql = "SELECT " + idColumn + " FROM " + table + " ORDER BY " + idColumn + " DESC LIMIT 1";
+    public String getNextEmployeeId(String table, String idColumn, String prefix) {
+        return getNextId(table, idColumn, prefix);
+    }
+
+    private String getNextId(String table, String idColumn, String prefix) {
+        String sql = "SELECT " + idColumn + " FROM " + table;
         List<String> rows = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString(1));
-        if (rows.isEmpty()) {
-           if (table.equals("DOCTOR")) return "BS000";
-           if (table.equals("CASHIER")) return "TN000";
-           if (table.equals("INVENTORY_MANAGER")) return "QK000";
-           if (table.equals("ADMINISTRATOR")) return "QT000";
-           return "EM000";
+
+        int max = 0;
+        for (String id : rows) {
+            if (id == null) continue;
+            String num = id.replaceAll("\\D+", "");
+            if (!num.isEmpty()) {
+                int value = Integer.parseInt(num);
+                if (value > max) {
+                    max = value;
+                }
+            }
         }
-        return rows.get(0);
+
+        return String.format("%s%03d", prefix, max + 1);
     }
 
     public void insertAccount(String id, String username, String password, String email, String authority) {
@@ -122,10 +130,9 @@ public class AccountDao {
         jdbcTemplate.update(sql, id, username, password, email, authority);
     }
 
-    public void insertEmployeeRow(String table, String idCol, String empId, String acctId, String name) {
-        // Assume role tables have at least ID and ACCOUNT_ID. Using NAME if exists.
-        String sql = "INSERT INTO " + table + " (" + idCol + ", ACCOUNT_ID, NAME) VALUES (?, ?, ?)";
-        jdbcTemplate.update(sql, empId, acctId, name);
+    public void insertEmployeeRow(String table, String idCol, String empId, String acctId, String name, String roleLabel) {
+        String sql = "INSERT INTO " + table + " (" + idCol + ", ACCOUNT_ID, NAME, ROLE) VALUES (?, ?, ?, ?)";
+        jdbcTemplate.update(sql, empId, acctId, name, roleLabel);
     }
 
     public void updateAccount(String id, String email, String password) {
@@ -169,66 +176,55 @@ public class AccountDao {
     }
 
     public void nullifyEmployeeReferences(String accountId) {
-        // 1. Get role IDs first
         Optional<String> docId = findDoctorIdByAccountId(accountId);
         Optional<String> cashId = findCashierIdByAccountId(accountId);
         Optional<String> invId = findInventoryManagerIdByAccountId(accountId);
 
-        // 2. Nullify references (Try-Catch to handle missing tables/columns)
         try {
             docId.ifPresent(id -> jdbcTemplate.update("UPDATE VACCINATION_FORM SET DOCTOR_ID = NULL WHERE DOCTOR_ID = ?", id));
         } catch (Exception ignored) {}
-        
+
         try {
-            cashId.ifPresent(id -> {
-                jdbcTemplate.update("UPDATE VACCINATION_FORM SET CASHIER_ID = NULL WHERE CASHIER_ID = ?", id);
-            });
-        } catch (Exception ignored) {}
-        
-        try {
-            cashId.ifPresent(id -> {
-                jdbcTemplate.update("UPDATE BILL SET CASHIER_ID = NULL WHERE CASHIER_ID = ?", id);
-            });
+            cashId.ifPresent(id -> jdbcTemplate.update("UPDATE VACCINATION_FORM SET CASHIER_ID = NULL WHERE CASHIER_ID = ?", id));
         } catch (Exception ignored) {}
 
         try {
-            invId.ifPresent(id -> {
-                jdbcTemplate.update("UPDATE VACCINE SET INVENTORY_MANAGER_ID = NULL WHERE INVENTORY_MANAGER_ID = ?", id);
-            });
+            cashId.ifPresent(id -> jdbcTemplate.update("UPDATE BILL SET CASHIER_ID = NULL WHERE CASHIER_ID = ?", id));
+        } catch (Exception ignored) {}
+
+        try {
+            invId.ifPresent(id -> jdbcTemplate.update("UPDATE VACCINE SET INVENTORY_MANAGER_ID = NULL WHERE INVENTORY_MANAGER_ID = ?", id));
         } catch (Exception ignored) {}
     }
 
     public void deleteAccountCascade(String accountId) {
-        // 1. Nullify references in Vaccination Form & Bill to avoid FK errors
         nullifyEmployeeReferences(accountId);
 
-        // 2. Delete from role tables
         jdbcTemplate.update("DELETE FROM DOCTOR WHERE ACCOUNT_ID = ?", accountId);
         jdbcTemplate.update("DELETE FROM CASHIER WHERE ACCOUNT_ID = ?", accountId);
         jdbcTemplate.update("DELETE FROM INVENTORY_MANAGER WHERE ACCOUNT_ID = ?", accountId);
         jdbcTemplate.update("DELETE FROM ADMINISTRATOR WHERE ACCOUNT_ID = ?", accountId);
-        
-        // 3. Finally delete account
+
         jdbcTemplate.update("DELETE FROM ACCOUNT WHERE ACCOUNT_ID = ?", accountId);
     }
 
     public List<AccountInfoDTO> searchStaff(String role, String keyword) {
         StringBuilder sql = new StringBuilder("""
                 SELECT DISTINCT a.ACCOUNT_ID, a.AUTHORITY, a.USERNAME, a.EMAIL, a.PASSWORD,
-                       CASE a.AUTHORITY
-                         WHEN 'DOCTOR' THEN d.DOCTOR_ID
-                         WHEN 'CASHIER' THEN c.CASHIER_ID
-                         WHEN 'INVENTORY_MANAGER' THEN i.INVENTORY_MANAGER_ID
-                         WHEN 'ADMINISTRATOR' THEN m.ADMINISTRATOR_ID
+                       CASE
+                         WHEN a.AUTHORITY = 'DOCTOR' THEN d.DOCTOR_ID
+                         WHEN a.AUTHORITY = 'CASHIER' THEN c.CASHIER_ID
+                         WHEN a.AUTHORITY IN ('INVENTORY_MANAGER', 'IM') THEN i.INVENTORY_MANAGER_ID
+                         WHEN a.AUTHORITY IN ('ADMINISTRATOR', 'ADMIN') THEN m.ADMINISTRATOR_ID
                          ELSE NULL
-                       END as EMP_ID,
-                       CASE a.AUTHORITY
-                         WHEN 'DOCTOR' THEN d.NAME
-                         WHEN 'CASHIER' THEN c.NAME
-                         WHEN 'INVENTORY_MANAGER' THEN i.NAME
-                         WHEN 'ADMINISTRATOR' THEN m.NAME
+                       END AS EMP_ID,
+                       CASE
+                         WHEN a.AUTHORITY = 'DOCTOR' THEN d.NAME
+                         WHEN a.AUTHORITY = 'CASHIER' THEN c.NAME
+                         WHEN a.AUTHORITY IN ('INVENTORY_MANAGER', 'IM') THEN i.NAME
+                         WHEN a.AUTHORITY IN ('ADMINISTRATOR', 'ADMIN') THEN m.NAME
                          ELSE NULL
-                       END as EMP_NAME
+                       END AS EMP_NAME
                 FROM ACCOUNT a
                 LEFT JOIN DOCTOR d ON a.ACCOUNT_ID = d.ACCOUNT_ID
                 LEFT JOIN CASHIER c ON a.ACCOUNT_ID = c.ACCOUNT_ID
@@ -236,12 +232,14 @@ public class AccountDao {
                 LEFT JOIN ADMINISTRATOR m ON a.ACCOUNT_ID = m.ACCOUNT_ID
                 WHERE 1=1
                 """);
+
         java.util.ArrayList<Object> params = new java.util.ArrayList<>();
 
         if (role != null && !role.isEmpty()) {
             sql.append(" AND a.AUTHORITY = ?");
             params.add(role);
         }
+
         if (keyword != null && !keyword.isEmpty()) {
             sql.append(" AND (a.USERNAME LIKE ? OR COALESCE(d.NAME, c.NAME, i.NAME, m.NAME) LIKE ?)");
             params.add("%" + keyword + "%");
@@ -249,6 +247,7 @@ public class AccountDao {
         }
 
         sql.append(" ORDER BY a.ACCOUNT_ID DESC");
+
         return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> {
             AccountInfoDTO dto = new AccountInfoDTO();
             dto.setAccountId(rs.getString("ACCOUNT_ID"));
@@ -271,14 +270,17 @@ public class AccountDao {
 
         public String getAccountId() { return accountId; }
         public void setAccountId(String accountId) { this.accountId = accountId; }
+
         public String getAuthority() { return authority; }
         public void setAuthority(String authority) { this.authority = authority; }
+
         public String getUsername() { return username; }
         public void setUsername(String username) { this.username = username; }
+
         public String getPassword() { return password; }
         public void setPassword(String password) { this.password = password; }
+
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
     }
 }
-
