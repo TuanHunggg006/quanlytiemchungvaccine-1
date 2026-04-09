@@ -24,7 +24,7 @@ public class CustomerService {
 
     public String createCustomer(CustomerDTO dto) {
         String lastId = customerDao.getLatestCustomerId();
-        String nextId = generateNextId(lastId, "KH");
+        String nextId = generateNextId(lastId, "CUS");
         customerDao.insertCustomer(nextId, dto);
         return nextId;
     }
