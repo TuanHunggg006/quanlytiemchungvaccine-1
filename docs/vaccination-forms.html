@@ -40,6 +40,7 @@
             <h2 style="margin:0 0 10px;">Danh sách phiếu tiêm</h2>
             <span style="font-size:10px; color:rgba(255,255,255,0.3);">Build: 2026.04.04-FixPrice</span>
           </div>
+
           <div class="row">
             <div class="field" style="min-width:140px;">
               <label for="searchField">Trường tìm kiếm</label>
@@ -51,34 +52,36 @@
                 <option value="vaccinationDate">Ngày Tiêm</option>
               </select>
             </div>
+
             <div class="field" style="flex:1;min-width:260px;">
               <label for="keyword">Nội dung tìm kiếm</label>
               <input id="keyword" placeholder="Nhập từ khóa để lọc..." />
             </div>
+
             <div style="align-self:flex-end;">
               <button class="btn primary" onclick="renderFormsTable()">Tìm kiếm</button>
             </div>
           </div>
 
-
           <div style="overflow:auto;max-height:320px;margin-top:14px;">
             <table>
               <thead>
-              <tr>
-                <th>ID</th>
-                <th>Khách hàng</th>
-                <th>Giới tính</th>
-                <th>Ngày sinh</th>
-                <th>Bác sĩ</th>
-                <th>Thu ngân</th>
-                <th>Ngày tiêm</th>
-                <th>Chi tiết</th>
-                <th>Bill?</th>
-              </tr>
+                <tr>
+                  <th>ID</th>
+                  <th>Khách hàng</th>
+                  <th>Giới tính</th>
+                  <th>Ngày sinh</th>
+                  <th>Bác sĩ</th>
+                  <th>Thu ngân</th>
+                  <th>Ngày tiêm</th>
+                  <th>Chi tiết</th>
+                  <th>Bill?</th>
+                </tr>
               </thead>
               <tbody id="formsBody"></tbody>
             </table>
           </div>
+
           <div class="hint" style="margin-top:10px;">Tạo phiếu mới ở phần bên dưới.</div>
         </div>
 
@@ -92,6 +95,7 @@
               <label for="vaccFormId">Mã phiếu tiêm (optional)</label>
               <input id="vaccFormId" placeholder="PT001 (để trống nếu backend tự sinh)" />
             </div>
+
             <div class="field" style="min-width:240px;flex:1;">
               <label for="vaccDate">Ngày tiêm</label>
               <input id="vaccDate" type="date" />
@@ -101,22 +105,24 @@
           <div class="row">
             <div class="field" style="min-width:220px;flex:1;">
               <label for="customerId">Mã khách hàng</label>
-              <input id="customerId" placeholder="VD: KH0001" />
+              <input id="customerId" placeholder="VD: CUS001" />
             </div>
+
             <div class="field" style="min-width:220px;flex:1;">
               <label for="doctorId">Mã bác sĩ</label>
-              <input id="doctorId" placeholder="VD: BS0001" />
+              <input id="doctorId" placeholder="VD: DOC001" />
             </div>
+
             <div class="field" style="min-width:220px;flex:1;">
               <label for="cashierId">Mã thu ngân</label>
-              <input id="cashierId" placeholder="VD: TN0001" />
+              <input id="cashierId" placeholder="VD: CAS001" />
             </div>
           </div>
 
           <div style="margin-top:16px;">
             <div class="hint" style="margin-bottom:10px;">
               Thêm detail vaccine (tối thiểu 1 dòng). Các field:
-              `vaccineId, cnt, dose, retentionDate, price`.
+              `VaccineId, Cnt, Dose, RetentionDate, Price`.
             </div>
 
             <div id="detailsBox" class="card" style="padding:12px;background:rgba(255,255,255,0.02);border-radius:12px;">
@@ -138,124 +144,175 @@
 
   <script src="assets/js/api.js"></script>
   <script src="assets/js/app.js"></script>
+
   <script>
     initPage();
     addDetail();
     loadVaccineListForDatalist();
 
-    async function loadVaccineListForDatalist() {
-      try {
-        const vaccines = await apiRequest("/api/vaccines");
-        const dl = document.createElement("datalist");
-        dl.id = "vaccineDataList";
-        vaccines.forEach(v => {
-          const opt = document.createElement("option");
-          opt.value = v.vaccineId;
-          opt.textContent = `${v.name} (${v.price.toLocaleString()} VNĐ)`;
-          dl.appendChild(opt);
-        });
-        document.body.appendChild(dl);
-      } catch (err) {
-        console.error("Lỗi khi tải danh mục vaccine cho datalist:", err);
-      }
-    }
-
-    function showMsg(text, isError=false){
+    function showMsg(text, isError = false) {
       const msg = document.getElementById("msg");
       msg.style.display = "block";
       msg.textContent = text;
       msg.className = "msg" + (isError ? " error" : "");
     }
 
-    function addDetail(){
+    function getVaccineIdValue(v) {
+      return v.vaccineId ?? v.VaccineId ?? v.VACCINE_ID ?? v.id ?? "";
+    }
+
+    function getVaccineNameValue(v) {
+      return v.name ?? v.Name ?? v.NAME ?? "";
+    }
+
+    function getVaccinePriceValue(v) {
+      return Number(v.price ?? v.Price ?? v.PRICE ?? 0);
+    }
+
+    async function loadVaccineListForDatalist() {
+      try {
+        const vaccines = await apiRequest("/api/vaccines");
+
+        let oldList = document.getElementById("vaccineDataList");
+        if (oldList) oldList.remove();
+
+        const dl = document.createElement("datalist");
+        dl.id = "vaccineDataList";
+
+        vaccines.forEach(v => {
+          const vaccineId = getVaccineIdValue(v);
+          const vaccineName = getVaccineNameValue(v);
+          const vaccinePrice = getVaccinePriceValue(v);
+
+          if (!vaccineId) return;
+
+          const opt = document.createElement("option");
+          opt.value = vaccineId;
+          opt.textContent = `${vaccineName} (${vaccinePrice.toLocaleString()} VNĐ)`;
+          dl.appendChild(opt);
+        });
+
+        document.body.appendChild(dl);
+      } catch (err) {
+        console.error("Lỗi khi tải danh mục vaccine cho datalist:", err);
+      }
+    }
+
+    function addDetail() {
       const idx = document.querySelectorAll(".detailRow").length;
       const el = document.createElement("div");
       el.className = "detailRow";
       el.dataset.idx = idx;
       el.style.marginTop = "10px";
+
       el.innerHTML = `
         <div class="row" style="margin-top:8px;">
           <div class="field" style="min-width:180px;flex:1;">
-            <label>vaccineId</label>
-            <input id="d_vaccineId_${idx}" list="vaccineDataList" placeholder="Gõ mã (VD: VC0001)..." 
-                   oninput="handleVaccineDetailChange(${idx}, true)"/>
+            <label>VaccineId</label>
+            <input
+              id="d_VaccineId_${idx}"
+              list="vaccineDataList"
+              placeholder="Gõ mã (VD: VC0001)..."
+              oninput="handleVaccineDetailChange(${idx}, true)"
+            />
           </div>
+
           <div class="field" style="min-width:130px;">
-            <label>cnt (số lượng)</label>
-            <input id="d_cnt_${idx}" type="number" min="1" value="1" 
-                   oninput="handleVaccineDetailChange(${idx}, false)"/>
+            <label>Cnt (mũi số)</label>
+            <input
+              id="d_Cnt_${idx}"
+              type="number"
+              min="1"
+              value="1"
+              oninput="handleVaccineDetailChange(${idx}, false)"
+            />
           </div>
+
           <div style="align-self:flex-end; padding-bottom: 2px;">
-            <button class="btn secondary" type="button" style="background:#3b82f6;color:white;" onclick="handleVaccineDetailChange(${idx}, true)">Tính giá</button>
+            <button
+              class="btn secondary"
+              type="button"
+              style="background:#3b82f6;color:white;"
+              onclick="handleVaccineDetailChange(${idx}, true)"
+            >
+              Tính giá
+            </button>
           </div>
+
           <div class="field" style="min-width:130px;">
-            <label>dose</label>
-            <input id="d_dose_${idx}" type="number" min="1" value="1"/>
+            <label>Dose</label>
+            <input id="d_Dose_${idx}" type="number" min="1" value="1" />
           </div>
+
           <div class="field" style="min-width:180px;">
-            <label>retentionDate</label>
-            <input id="d_retention_${idx}" type="date"/>
+            <label>RetentionDate</label>
+            <input id="d_Retention_${idx}" type="date" />
           </div>
+
           <div class="field" style="min-width:160px;">
-            <label>price (thành tiền)</label>
-            <input id="d_price_${idx}" type="number" step="0.01" min="0" value="0"/>
+            <label>Price (thành tiền)</label>
+            <input id="d_Price_${idx}" type="number" step="0.01" min="0" value="0" />
           </div>
+
           <div style="align-self:flex-end;">
             <button class="btn danger" type="button" onclick="removeDetail(this)">Xóa</button>
           </div>
         </div>
       `;
+
       document.getElementById("detailsList").appendChild(el);
+    }
+
+    function removeDetail(btn) {
+      const row = btn.closest(".detailRow");
+      if (row) row.remove();
     }
 
     const unitPriceCache = {};
 
     async function handleVaccineDetailChange(idx, isIdChange) {
-      const vIdInput = document.getElementById(`d_vaccineId_${idx}`);
-      const cntInput = document.getElementById(`d_cnt_${idx}`);
-      const priceInput = document.getElementById(`d_price_${idx}`);
-      
+      const vIdInput = document.getElementById(`d_VaccineId_${idx}`);
+      const cntInput = document.getElementById(`d_Cnt_${idx}`);
+      const priceInput = document.getElementById(`d_Price_${idx}`);
+
+      if (!vIdInput || !cntInput || !priceInput) return;
+
       const vId = vIdInput.value.trim();
       const cnt = parseInt(cntInput.value || "1", 10);
 
-      if (!vId) return;
+      if (!vId) {
+        priceInput.value = 0;
+        return;
+      }
 
       try {
         let unitPrice = 0;
+
         if (isIdChange || unitPriceCache[vId] === undefined) {
-          console.log(`[Diagnostic] Đang lấy giá cho vaccine: ${vId}...`);
           unitPrice = await apiRequest(`/api/vaccines/${encodeURIComponent(vId)}/price`);
-          console.log(`[Diagnostic] Kết quả đơn giá cho ${vId}:`, unitPrice);
-          unitPriceCache[vId] = unitPrice;
+          unitPriceCache[vId] = Number(unitPrice || 0);
         } else {
-          unitPrice = unitPriceCache[vId];
+          unitPrice = Number(unitPriceCache[vId] || 0);
         }
 
-        // Tự động tính thành tiền: Đơn giá x Số lượng
         const totalPrice = unitPrice * cnt;
         priceInput.value = totalPrice.toFixed(2);
-        vIdInput.style.borderColor = ""; 
+        vIdInput.style.borderColor = "";
       } catch (err) {
-        console.error("[Diagnostic] Lỗi khi lấy giá vaccine:", err);
-        // Nếu lỗi (mã ko tồn tại), reset giá về 0 và highlight đỏ
+        console.error("Lỗi khi lấy giá vaccine:", err);
         priceInput.value = 0;
         if (isIdChange) vIdInput.style.borderColor = "#ef4444";
       }
     }
 
-    function removeDetail(btn){
-      const row = btn.closest(".detailRow");
-      row.remove();
-    }
-
     let allFormsData = [];
 
-    async function loadForms(){
-      try{
+    async function loadForms() {
+      try {
         allFormsData = await apiRequest("/api/vaccination-forms");
         renderFormsTable();
         showMsg("Tải danh sách phiếu tiêm thành công.");
-      }catch(err){
+      } catch (err) {
         showMsg(err.message, true);
       }
     }
@@ -267,21 +324,23 @@
       body.innerHTML = "";
 
       const filtered = allFormsData.filter(f => {
-         if (field === "all") {
-            return (f.vaccinationFormId?.toLowerCase().includes(kw)) ||
-                   (f.customerName?.toLowerCase().includes(kw)) ||
-                   (f.doctorName?.toLowerCase().includes(kw)) ||
-                   (f.vaccinationDate?.toLowerCase().includes(kw));
-         } else {
-            const val = f[field] ? String(f[field]).toLowerCase() : "";
-            return val.includes(kw);
-         }
+        if (field === "all") {
+          return (
+            (f.vaccinationFormId?.toLowerCase().includes(kw)) ||
+            (f.customerName?.toLowerCase().includes(kw)) ||
+            (f.doctorName?.toLowerCase().includes(kw)) ||
+            (f.vaccinationDate?.toLowerCase().includes(kw))
+          );
+        } else {
+          const val = f[field] ? String(f[field]).toLowerCase() : "";
+          return val.includes(kw);
+        }
       });
 
-      for (const f of filtered){
+      for (const f of filtered) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${f.vaccinationFormId}</td>
+          <td>${f.vaccinationFormId ?? ""}</td>
           <td>${f.customerName ?? ""}</td>
           <td>${f.gender ?? ""}</td>
           <td>${f.customerBirthDate ?? ""}</td>
@@ -295,13 +354,11 @@
       }
     }
 
-
-
-    async function checkBill(id){
-      try{
+    async function checkBill(id) {
+      try {
         const payload = await apiRequest(`/api/vaccination-forms/${id}/payment-status`);
         alert(payload ? "Đã có bill cho phiếu này." : "Chưa có bill cho phiếu này.");
-      }catch(err){
+      } catch (err) {
         alert(err.message);
       }
     }
@@ -311,43 +368,54 @@
       if (typeof cn === "string") return cn;
       if (typeof cn === "object") {
         if ("value" in cn && cn.value != null) return String(cn.value);
-        if (Array.isArray(cn)) return cn.filter((x) => typeof x === "string").join(", ");
+        if (Array.isArray(cn)) return cn.filter(x => typeof x === "string").join(", ");
       }
       return String(cn);
     }
 
-    async function openDetails(id){
-      try{
+    async function openDetails(id) {
+      try {
         const vaccines = await apiRequest(`/api/vaccination-forms/${id}/vaccines`);
-        const customerName = await apiRequest(`/api/vaccination-forms/${id}/customer-name`).catch(()=>null);
-        const lines = vaccines.map(v => `${v.vaccineName} (cnt=${v.cnt}, dose=${v.dose}, retention=${v.retentionDate}, price=${v.price})`).join("\n");
+        const customerName = await apiRequest(`/api/vaccination-forms/${id}/customer-name`).catch(() => null);
+
+        const lines = vaccines
+          .map(v => `${v.vaccineName} (cnt=${v.cnt}, dose=${v.dose}, retention=${v.retentionDate}, price=${v.price})`)
+          .join("\n");
+
         const cust = formatCustomerName(customerName);
         alert(`Form: ${id}\nCustomer: ${cust || "(không có)"}\n${lines}`);
-      }catch(err){
+      } catch (err) {
         alert(err.message);
       }
     }
 
-    function getDetailsPayload(){
+    function getDetailsPayload() {
       const details = [];
       const inputs = document.querySelectorAll("#detailsList input");
       const byIdx = {};
-      for (const input of inputs){
+
+      for (const input of inputs) {
         const m = input.id.match(/d_(.+)_(\d+)/);
         if (!m) continue;
+
         const field = m[1];
         const idx = m[2];
+
         byIdx[idx] = byIdx[idx] || {};
-        if (field === "vaccineId") byIdx[idx].vaccineId = input.value.trim();
-        if (field === "cnt") byIdx[idx].cnt = parseInt(input.value || "1",10);
-        if (field === "dose") byIdx[idx].dose = parseInt(input.value || "1",10);
-        if (field === "retention") byIdx[idx].retentionDate = input.value;
-        if (field === "price") byIdx[idx].price = parseFloat(input.value || "0");
+
+        if (field === "VaccineId") byIdx[idx].vaccineId = input.value.trim();
+        if (field === "Cnt") byIdx[idx].cnt = parseInt(input.value || "1", 10);
+        if (field === "Dose") byIdx[idx].dose = parseInt(input.value || "1", 10);
+        if (field === "Retention") byIdx[idx].retentionDate = input.value;
+        if (field === "Price") byIdx[idx].price = parseFloat(input.value || "0");
       }
-      const idxs = Object.keys(byIdx).sort((a,b)=>parseInt(a)-parseInt(b));
-      for (const idx of idxs){
+
+      const idxs = Object.keys(byIdx).sort((a, b) => parseInt(a) - parseInt(b));
+
+      for (const idx of idxs) {
         const it = byIdx[idx];
         if (!it.vaccineId) continue;
+
         details.push({
           vaccineId: it.vaccineId,
           cnt: it.cnt || 1,
@@ -356,11 +424,12 @@
           price: it.price ?? 0
         });
       }
+
       return details;
     }
 
-    async function submitForm(){
-      try{
+    async function submitForm() {
+      try {
         const vaccinationFormId = (document.getElementById("vaccFormId").value || "").trim() || null;
         const vaccinationDate = document.getElementById("vaccDate").value;
         const customerId = document.getElementById("customerId").value.trim();
@@ -381,17 +450,19 @@
           details
         };
 
-        const res = await apiRequest("/api/vaccination-forms", { method:"POST", body: payload });
+        const res = await apiRequest("/api/vaccination-forms", {
+          method: "POST",
+          body: payload
+        });
+
         showMsg(`Tạo phiếu thành công. formId=${res}`, false);
         await loadForms();
-      }catch(err){
+      } catch (err) {
         showMsg(err.message, true);
       }
     }
 
-    // initial load
     loadForms();
   </script>
 </body>
 </html>
-
