@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Service
@@ -23,85 +24,63 @@ public class AccountService {
 
     @Transactional
     public String createAccount(AccountCreateRequest request) {
-        // 1. Generate Account ID
-        String lastAcctId = accountDao.getLatestAccountId();
-        String newAcctId = generateNextId(lastAcctId, "AC");
+        String username = clean(request.getUsername());
+        String password = clean(request.getPassword());
+        String email = clean(request.getEmail());
+        String name = clean(request.getName());
+        String role = normalizeAuthority(request.getAuthority());
 
-        // 2. Insert Account
-        accountDao.insertAccount(newAcctId, request.getUsername(), request.getPassword(), request.getEmail(), request.getAuthority());
+        validateCreateRequest(username, password, name, role);
 
-        // 3. Generate Employee ID and Insert into Role Table
-        String role = request.getAuthority();
-        String table = "";
-        String idCol = "";
-        String prefix = "";
-
-        switch (role) {
-            case "DOCTOR" -> { table = "DOCTOR"; idCol = "DOCTOR_ID"; prefix = "BS"; }
-            case "CASHIER" -> { table = "CASHIER"; idCol = "CASHIER_ID"; prefix = "TN"; }
-            case "INVENTORY_MANAGER" -> { table = "INVENTORY_MANAGER"; idCol = "INVENTORY_MANAGER_ID"; prefix = "QK"; }
-            case "ADMINISTRATOR" -> { table = "ADMINISTRATOR"; idCol = "ADMINISTRATOR_ID"; prefix = "QT"; }
-            default -> throw new IllegalArgumentException("Unknown role: " + role);
+        if (accountDao.findByUsername(username).isPresent()) {
+            throw new IllegalArgumentException("Username đã tồn tại");
         }
 
-        String lastEmpId = accountDao.getLatestEmployeeId(table, idCol);
-        String newEmpId = generateNextId(lastEmpId, prefix);
+        String newAcctId = accountDao.getNextAccountId();
 
-        accountDao.insertEmployeeRow(table, idCol, newEmpId, newAcctId, request.getName());
+        RoleMeta meta = getRoleMeta(role);
+        String newEmpId = accountDao.getNextEmployeeId(meta.table(), meta.idColumn(), meta.idPrefix());
+
+        accountDao.insertAccount(newAcctId, username, password, email, role);
+        accountDao.insertEmployeeRow(meta.table(), meta.idColumn(), newEmpId, newAcctId, name, meta.roleLabel());
 
         return newAcctId;
     }
 
     @Transactional
     public void updateAccount(String id, AccountCreateRequest request) {
-        // 1. Get current account info to check for role change
         List<AccountInfoDTO> all = accountDao.findAllWithDetails();
         AccountInfoDTO current = all.stream()
                 .filter(a -> a.getAccountId().equals(id))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Account not found: " + id));
 
-        String oldRole = current.getAuthority();
-        String newRole = request.getAuthority();
+        String oldRole = normalizeAuthority(current.getAuthority());
+        String newRole = normalizeAuthority(request.getAuthority());
+        String newName = clean(request.getName());
 
-        // 2. Update Email and Password in ACCOUNT table
-        accountDao.updateAccount(id, request.getEmail(), request.getPassword());
+        accountDao.updateAccount(id, clean(request.getEmail()), clean(request.getPassword()));
 
-        if (newRole != null && !newRole.equals(oldRole)) {
-            // ROLE CHANGED: Migrate between tables
-            
-            // 1. Try to nullify references first (best effort)
-            accountDao.nullifyEmployeeReferences(id);
-            
-            // 2. Check if old role table record is STILL referenced (if nullification failed or not allowed)
+        if (!newRole.equals(oldRole)) {
             String oldTable = getTableName(oldRole);
-            boolean canDelete = true;
-            if (!oldTable.isEmpty()) {
-                canDelete = !isRoleUsed(oldTable, id);
+
+            if (!oldTable.isEmpty() && isRoleUsed(oldTable, id)) {
+                throw new RuntimeException("Không thể đổi vai trò vì nhân sự này đã có dữ liệu liên quan");
             }
 
-            // 3. Delete from old table ONLY if not referenced elsewhere (prevents FK error)
-            if (canDelete && !oldTable.isEmpty()) {
+            if (!oldTable.isEmpty()) {
                 accountDao.deleteFromRoleTable(oldTable, id);
             }
 
-            // 4. Insert into new role table
-            String newTable = getTableName(newRole);
-            String idCol = getIdColumn(newRole);
-            String prefix = getPrefix(newRole);
+            RoleMeta meta = getRoleMeta(newRole);
+            String newEmpId = accountDao.getNextEmployeeId(meta.table(), meta.idColumn(), meta.idPrefix());
 
-            String lastEmpId = accountDao.getLatestEmployeeId(newTable, idCol);
-            String newEmpId = generateNextId(lastEmpId, prefix);
-
-            accountDao.insertEmployeeRow(newTable, idCol, newEmpId, id, request.getName());
-            
-            // 5. Update AUTHORITY in ACCOUNT table
+            accountDao.insertEmployeeRow(meta.table(), meta.idColumn(), newEmpId, id, newName, meta.roleLabel());
             accountDao.updateAuthority(id, newRole);
         } else {
-            // ROLE UNCHANGED: Just update name in the existing table
             String table = getTableName(oldRole);
             if (!table.isEmpty()) {
-                accountDao.updateEmployeeName(table, id, request.getName());
+                accountDao.updateEmployeeName(table, id, newName);
             }
         }
     }
@@ -122,8 +101,38 @@ public class AccountService {
         return false;
     }
 
+    private void validateCreateRequest(String username, String password, String name, String role) {
+        if (username.isEmpty()) {
+            throw new IllegalArgumentException("Username không được để trống");
+        }
+        if (password.isEmpty()) {
+            throw new IllegalArgumentException("Password không được để trống");
+        }
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("Tên nhân viên không được để trống");
+        }
+        if (role.isEmpty()) {
+            throw new IllegalArgumentException("Vai trò không được để trống");
+        }
+    }
+
+    private String clean(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String normalizeAuthority(String authority) {
+        if (authority == null) return "";
+        String value = authority.trim().toUpperCase(Locale.ROOT);
+
+        return switch (value) {
+            case "ADMIN" -> "ADMINISTRATOR";
+            case "IM" -> "INVENTORY_MANAGER";
+            default -> value;
+        };
+    }
+
     private String getTableName(String role) {
-        return switch (role) {
+        return switch (normalizeAuthority(role)) {
             case "DOCTOR" -> "DOCTOR";
             case "CASHIER" -> "CASHIER";
             case "INVENTORY_MANAGER" -> "INVENTORY_MANAGER";
@@ -132,23 +141,13 @@ public class AccountService {
         };
     }
 
-    private String getIdColumn(String role) {
-        return switch (role) {
-            case "DOCTOR" -> "DOCTOR_ID";
-            case "CASHIER" -> "CASHIER_ID";
-            case "INVENTORY_MANAGER" -> "INVENTORY_MANAGER_ID";
-            case "ADMINISTRATOR" -> "ADMINISTRATOR_ID";
-            default -> "EMPLOYEE_ID";
-        };
-    }
-
-    private String getPrefix(String role) {
-        return switch (role) {
-            case "DOCTOR" -> "BS";
-            case "CASHIER" -> "TN";
-            case "INVENTORY_MANAGER" -> "QK";
-            case "ADMINISTRATOR" -> "QT";
-            default -> "EM";
+    private RoleMeta getRoleMeta(String role) {
+        return switch (normalizeAuthority(role)) {
+            case "DOCTOR" -> new RoleMeta("DOCTOR", "DOCTOR_ID", "DOC", "Vaccination Doctor");
+            case "CASHIER" -> new RoleMeta("CASHIER", "CASHIER_ID", "CAS", "Cashier");
+            case "INVENTORY_MANAGER" -> new RoleMeta("INVENTORY_MANAGER", "INVENTORY_MANAGER_ID", "IM", "Inventory Manager");
+            case "ADMINISTRATOR" -> new RoleMeta("ADMINISTRATOR", "ADMINISTRATOR_ID", "AD", "System Admin");
+            default -> throw new IllegalArgumentException("Unknown role: " + role);
         };
     }
 
@@ -161,23 +160,5 @@ public class AccountService {
         return accountDao.searchStaff(role, keyword);
     }
 
-    private String generateNextId(String currentId, String prefix) {
-        // Find the numeric part at the end of the string
-        StringBuilder numStr = new StringBuilder();
-        for (int i = currentId.length() - 1; i >= 0; i--) {
-            char c = currentId.charAt(i);
-            if (Character.isDigit(c)) {
-                numStr.insert(0, c);
-            } else {
-                break;
-            }
-        }
-        
-        int nextNum = 1;
-        if (numStr.length() > 0) {
-            nextNum = Integer.parseInt(numStr.toString()) + 1;
-        }
-        
-        return String.format("%s%03d", prefix, nextNum);
-    }
+    private record RoleMeta(String table, String idColumn, String idPrefix, String roleLabel) {}
 }
