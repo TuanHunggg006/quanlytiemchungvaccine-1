@@ -113,13 +113,13 @@
 
       <div class="nav-tabs">
         <button id="tab-id" class="active" onclick="switchTab('id')">Tra cứu theo Mã Khách Hàng</button>
-        <button id="tab-name" onclick="switchTab('name')">Tra cứu theo Tên / SĐT</button>
+        <button id="tab-name" onclick="switchTab('name')">Tra cứu theo SĐT/ Mã Khách Hàng</button>
       </div>
 
       <div class="search-row" id="searchBox-id">
         <div class="search-field">
           <label for="searchId">Mã Khách Hàng</label>
-          <input id="searchId" type="text" placeholder="VD: KH0001" onkeydown="if(event.key==='Enter') doSearch('id')">
+          <input id="searchId" type="text" placeholder="VD: CUS001" onkeydown="if(event.key==='Enter') doSearch('id')">
         </div>
         <div style="align-self: flex-end;">
           <button class="btn primary" style="padding: 12px 24px; font-size: 1rem;" onclick="doSearch('id')">Tra Cứu</button>
