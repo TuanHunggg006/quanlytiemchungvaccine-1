@@ -1,12 +1,11 @@
 package com.example.vaccinationsystem.controller;
 
+import com.example.vaccinationsystem.dto.StatisticsDTO;
 import com.example.vaccinationsystem.service.StatisticsService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/statistics")
@@ -18,7 +17,7 @@ public class StatisticsController {
     }
 
     @GetMapping("/summary")
-    public Map<String, Object> getSummary(
+    public StatisticsDTO getSummary(
             @RequestHeader(value = "X-Cashier-Id", required = false) String cashierId
     ) {
         return statisticsService.getSummary(cashierId);
