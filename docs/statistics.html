@@ -212,7 +212,7 @@
       try {
         const data = await apiRequest("/api/statistics/summary");
 
-        // Admin cards
+        // Admin
         document.getElementById("totalRevenue").textContent = formatCurrency(data.totalRevenue);
         document.getElementById("todayBillsCount").textContent = Number(data.todayBillsCount || 0);
 
@@ -229,7 +229,7 @@
           `).join("");
         }
 
-        // Doctor reminders
+        // Doctor
         const upBody = document.getElementById("upcomingBody");
         const upcoming = data.upcomingVaccinations || [];
         if (!upcoming.length) {
@@ -245,7 +245,7 @@
           `).join("");
         }
 
-        // Inventory low stock
+        // Inventory
         const lowBody = document.getElementById("lowStockBody");
         const lowStocks = data.lowStockVaccines || [];
         if (!lowStocks.length) {
