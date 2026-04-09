@@ -174,104 +174,104 @@
     }
 
     async function loadStats() {
-      const session = getSession();
-      if (!session) return;
+  const session = getSession();
+  if (!session) return;
 
-      const authRaw = session.authority ?? session.role ?? session.userRole ?? session.AUTHORITY ?? "";
-      const role = normalizeRole(authRaw);
+  const authRaw = session.authority ?? session.role ?? session.userRole ?? session.AUTHORITY ?? "";
+  const role = normalizeRole(authRaw);
 
-      const isAdmin = role.includes("ADMIN") || !!session.administratorId;
-      const isDoctor = role.includes("DOCTOR") || !!session.doctorId;
-      const isCashier = role.includes("CASHIER") || !!session.cashierId;
-      const isInventory =
-        role.includes("INVENTORY") ||
-        role.includes("QK") ||
-        role === "IM" ||
-        !!session.inventoryManagerId;
+  const isAdmin = role.includes("ADMIN") || !!session.administratorId;
+  const isDoctor = role.includes("DOCTOR") || !!session.doctorId;
+  const isCashier = role.includes("CASHIER") || !!session.cashierId;
+  const isInventory =
+    role.includes("INVENTORY") ||
+    role.includes("QK") ||
+    role === "IM" ||
+    !!session.inventoryManagerId;
 
-      if (isAdmin) {
-        document.getElementById("section-admin").classList.add("active");
-        document.getElementById("section-inventory").classList.add("active");
+  if (isAdmin) {
+    document.getElementById("section-admin").classList.add("active");
+    document.getElementById("section-inventory").classList.add("active");
+  }
+  if (isDoctor) {
+    document.getElementById("section-doctor").classList.add("active");
+  }
+  if (isCashier) {
+    document.getElementById("section-cashier").classList.add("active");
+  }
+  if (isInventory) {
+    document.getElementById("section-inventory").classList.add("active");
+  }
+
+  if (!isAdmin && !isDoctor && !isCashier && !isInventory) {
+    document.getElementById("noDataMsg").style.display = "block";
+    document.getElementById("noDataMsg").textContent = "Không có dữ liệu thống kê cho vai trò này.";
+    return;
+  }
+
+  try {
+    const data = await apiRequest("/api/statistics/summary", {
+      headers: {
+        "X-Cashier-Id": session.cashierId || ""
       }
-      if (isDoctor) {
-        document.getElementById("section-doctor").classList.add("active");
-      }
-      if (isCashier) {
-        document.getElementById("section-cashier").classList.add("active");
-      }
-      if (isInventory) {
-        document.getElementById("section-inventory").classList.add("active");
-      }
+    });
 
-      if (!isAdmin && !isDoctor && !isCashier && !isInventory) {
-        document.getElementById("noDataMsg").style.display = "block";
-        document.getElementById("noDataMsg").textContent = "Không có dữ liệu thống kê cho vai trò này.";
-        return;
-      }
+    document.getElementById("totalRevenue").textContent = formatCurrency(data.totalRevenue);
+    document.getElementById("todayBillsCount").textContent = Number(data.todayBillsCount || 0);
 
-      try {
-        const data = await apiRequest("/api/statistics/summary");
-
-        // Admin
-        document.getElementById("totalRevenue").textContent = formatCurrency(data.totalRevenue);
-        document.getElementById("todayBillsCount").textContent = Number(data.todayBillsCount || 0);
-
-        const topBody = document.getElementById("topVaccinesBody");
-        const topVaccines = data.topVaccines || [];
-        if (!topVaccines.length) {
-          renderEmptyRow("topVaccinesBody", 2, "Chưa có dữ liệu.");
-        } else {
-          topBody.innerHTML = topVaccines.map(v => `
-            <tr>
-              <td>${v.NAME ?? ""}</td>
-              <td>${v.USAGE_COUNT ?? 0}</td>
-            </tr>
-          `).join("");
-        }
-
-        // Doctor
-        const upBody = document.getElementById("upcomingBody");
-        const upcoming = data.upcomingVaccinations || [];
-        if (!upcoming.length) {
-          renderEmptyRow("upcomingBody", 4, "Không có khách hàng cần nhắc tiêm trong 7 ngày tới.");
-        } else {
-          upBody.innerHTML = upcoming.map(u => `
-            <tr>
-              <td>${u.CUSTOMER_NAME ?? ""}</td>
-              <td>${u.VACCINE_NAME ?? ""}</td>
-              <td>${u.DOSE ?? ""}</td>
-              <td>${u.RETENTION ?? ""}</td>
-            </tr>
-          `).join("");
-        }
-
-        // Inventory
-        const lowBody = document.getElementById("lowStockBody");
-        const lowStocks = data.lowStockVaccines || [];
-        if (!lowStocks.length) {
-          renderEmptyRow("lowStockBody", 3, "Hiện chưa có vaccine nào sắp hết hoặc hết hàng.");
-        } else {
-          lowBody.innerHTML = lowStocks.map(v => `
-            <tr>
-              <td>${v.NAME ?? ""}</td>
-              <td>${v.QUANTITY_AVAILABLE ?? 0}</td>
-              <td>
-                <span class="badge" style="background:${Number(v.QUANTITY_AVAILABLE || 0) === 0 ? '#ff4444' : '#ffbb33'}">
-                  ${Number(v.QUANTITY_AVAILABLE || 0) === 0 ? 'Hết hàng' : 'Sắp hết'}
-                </span>
-              </td>
-            </tr>
-          `).join("");
-        }
-
-        // Cashier
-        document.getElementById("todayRevenue").textContent = formatCurrency(data.todayRevenue);
-      } catch (err) {
-        console.error(err);
-        document.getElementById("noDataMsg").style.display = "block";
-        document.getElementById("noDataMsg").textContent = "Không tải được dữ liệu thống kê.";
-      }
+    const topBody = document.getElementById("topVaccinesBody");
+    const topVaccines = data.topVaccines || [];
+    if (!topVaccines.length) {
+      renderEmptyRow("topVaccinesBody", 2, "Chưa có dữ liệu.");
+    } else {
+      topBody.innerHTML = topVaccines.map(v => `
+        <tr>
+          <td>${v.NAME ?? ""}</td>
+          <td>${v.USAGE_COUNT ?? 0}</td>
+        </tr>
+      `).join("");
     }
+
+    const upBody = document.getElementById("upcomingBody");
+    const upcoming = data.upcomingVaccinations || [];
+    if (!upcoming.length) {
+      renderEmptyRow("upcomingBody", 4, "Không có khách hàng cần nhắc tiêm trong 7 ngày tới.");
+    } else {
+      upBody.innerHTML = upcoming.map(u => `
+        <tr>
+          <td>${u.CUSTOMER_NAME ?? ""}</td>
+          <td>${u.VACCINE_NAME ?? ""}</td>
+          <td>${u.DOSE ?? ""}</td>
+          <td>${u.RETENTION ?? ""}</td>
+        </tr>
+      `).join("");
+    }
+
+    const lowBody = document.getElementById("lowStockBody");
+    const lowStocks = data.lowStockVaccines || [];
+    if (!lowStocks.length) {
+      renderEmptyRow("lowStockBody", 3, "Hiện chưa có vaccine nào sắp hết hoặc hết hàng.");
+    } else {
+      lowBody.innerHTML = lowStocks.map(v => `
+        <tr>
+          <td>${v.NAME ?? ""}</td>
+          <td>${v.QUANTITY_AVAILABLE ?? 0}</td>
+          <td>
+            <span class="badge" style="background:${Number(v.QUANTITY_AVAILABLE || 0) === 0 ? '#ff4444' : '#ffbb33'}">
+              ${Number(v.QUANTITY_AVAILABLE || 0) === 0 ? 'Hết hàng' : 'Sắp hết'}
+            </span>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    document.getElementById("todayRevenue").textContent = formatCurrency(data.todayRevenue);
+  } catch (err) {
+    console.error(err);
+    document.getElementById("noDataMsg").style.display = "block";
+    document.getElementById("noDataMsg").textContent = "Không tải được dữ liệu thống kê.";
+  }
+}
 
     loadStats();
   </script>
