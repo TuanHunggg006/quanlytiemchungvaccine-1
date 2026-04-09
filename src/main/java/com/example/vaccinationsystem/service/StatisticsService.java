@@ -4,6 +4,9 @@ import com.example.vaccinationsystem.dto.StatisticsDTO;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Map;
+
 @Service
 public class StatisticsService {
     private final JdbcTemplate jdbcTemplate;
@@ -18,13 +21,8 @@ public class StatisticsService {
         dto.setTotalRevenue(getTotalRevenue());
         dto.setTodayBillsCount(getTodayBillsCount());
         dto.setTodayRevenue(getTodayRevenueByCashier(cashierId));
-
         dto.setTopVaccines(getTopVaccines());
         dto.setUpcomingVaccinations(getUpcomingVaccinations());
-
-        // Quan trọng:
-        // Trả về TẤT CẢ vaccine sắp hết / hết hàng
-        // Không lọc theo INVENTORY_MANAGER_ID
         dto.setLowStockVaccines(getLowStockVaccines());
 
         return dto;
@@ -58,7 +56,7 @@ public class StatisticsService {
         return value == null ? 0 : value;
     }
 
-    private java.util.List<java.util.Map<String, Object>> getTopVaccines() {
+    private List<Map<String, Object>> getTopVaccines() {
         String sql = """
             SELECT
                 v.NAME AS NAME,
@@ -73,7 +71,7 @@ public class StatisticsService {
         return jdbcTemplate.queryForList(sql);
     }
 
-    private java.util.List<java.util.Map<String, Object>> getUpcomingVaccinations() {
+    private List<Map<String, Object>> getUpcomingVaccinations() {
         String sql = """
             SELECT
                 c.NAME AS CUSTOMER_NAME,
@@ -91,7 +89,7 @@ public class StatisticsService {
         return jdbcTemplate.queryForList(sql);
     }
 
-    private java.util.List<java.util.Map<String, Object>> getLowStockVaccines() {
+    private List<Map<String, Object>> getLowStockVaccines() {
         String sql = """
             SELECT
                 VACCINE_ID AS VACCINE_ID,
