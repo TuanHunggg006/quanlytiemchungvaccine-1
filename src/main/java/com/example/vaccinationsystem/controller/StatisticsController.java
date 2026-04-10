@@ -18,9 +18,8 @@ public class StatisticsController {
 
     @GetMapping("/summary")
     public StatisticsDTO getSummary(
-            @RequestHeader(value = "X-Cashier-Id", required = false) String cashierId,
-            @RequestHeader(value = "X-Username", required = false) String username
+            @RequestHeader(value = "X-Cashier-Id", required = false) String cashierId
     ) {
-        return statisticsService.getSummary(cashierId, username);
+        return statisticsService.getSummary(cashierId);
     }
 }
