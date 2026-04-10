@@ -15,17 +15,40 @@ public class StatisticsService {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public StatisticsDTO getSummary(String cashierId) {
+    public StatisticsDTO getSummary(String cashierId, String username) {
         StatisticsDTO dto = new StatisticsDTO();
+
+        String resolvedCashierId = resolveCashierId(cashierId, username);
 
         dto.setTotalRevenue(getTotalRevenue());
         dto.setTodayBillsCount(getTodayBillsCount());
-        dto.setTodayRevenue(getTodayRevenueByCashier(cashierId));
+        dto.setTodayRevenue(getTodayRevenueByCashier(resolvedCashierId));
         dto.setTopVaccines(getTopVaccines());
         dto.setUpcomingVaccinations(getUpcomingVaccinations());
         dto.setLowStockVaccines(getLowStockVaccines());
 
         return dto;
+    }
+
+    private String resolveCashierId(String cashierId, String username) {
+        if (cashierId != null && !cashierId.isBlank()) {
+            return cashierId;
+        }
+
+        if (username == null || username.isBlank()) {
+            return "";
+        }
+
+        String sql = """
+            SELECT c.CASHIER_ID
+            FROM ACCOUNT a
+            JOIN CASHIER c ON a.ACCOUNT_ID = c.ACCOUNT_ID
+            WHERE a.USERNAME = ?
+            LIMIT 1
+        """;
+
+        List<String> rows = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("CASHIER_ID"), username);
+        return rows.isEmpty() ? "" : rows.get(0);
     }
 
     private double getTotalRevenue() {
@@ -67,7 +90,6 @@ public class StatisticsService {
             ORDER BY USAGE_COUNT DESC, v.NAME ASC
             LIMIT 5
         """;
-
         return jdbcTemplate.queryForList(sql);
     }
 
@@ -85,7 +107,6 @@ public class StatisticsService {
             WHERE d.RETENTION BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
             ORDER BY d.RETENTION ASC, c.NAME ASC
         """;
-
         return jdbcTemplate.queryForList(sql);
     }
 
@@ -99,7 +120,6 @@ public class StatisticsService {
             WHERE QUANTITY_AVAILABLE <= 25
             ORDER BY QUANTITY_AVAILABLE ASC, NAME ASC
         """;
-
         return jdbcTemplate.queryForList(sql);
     }
 }
